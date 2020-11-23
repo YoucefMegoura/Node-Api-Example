@@ -1,7 +1,11 @@
 exports.createErrorWithStatusCode = (err, statusCode, data) => {
     const error = new Error(err)
-    error.statusCode = statusCode
-    error.data = data
+    if (statusCode){
+        error.statusCode = statusCode
+    }
+    if (data) {
+        error.data = data
+    }
     throw error;
 }
 

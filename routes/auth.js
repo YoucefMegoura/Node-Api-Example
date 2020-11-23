@@ -23,6 +23,8 @@ router.put(
         body("name").trim().not().isEmpty(),
     ],
     authController.putSignUp
-);
+)
+
+router.post('/login', authController.postLogin)
 
 module.exports = router;

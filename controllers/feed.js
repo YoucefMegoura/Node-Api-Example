@@ -3,11 +3,11 @@ const path = require("path");
 const { validationResult } = require("express-validator");
 const { create } = require("../models/post");
 const Post = require("../models/post");
+const User = require("../models/user");
 const {
     throwAsyncError,
     createErrorWithStatusCode,
 } = require("../utils/errorHandling");
-
 
 exports.getPosts = (req, res, next) => {
     const currentPage = req.query.page || 1;
@@ -50,18 +50,30 @@ exports.postPost = (req, res, next) => {
     const title = req.body.title;
     const content = req.body.content;
     const imageUrl = req.file.path.replace("\\", "/");
+    let creator;
     const post = new Post({
         title: title,
         content: content,
         imageUrl: imageUrl,
-        creator: "Youcef Megoura",
+        creator: req.userId,
     });
     post.save()
-        .then((post) => {
-            console.log(post);
+        .then((result) => {
+            return User.findById(req.userId);
+        })
+        .then((user) => {
+            creator = user;
+            user.posts.push(post);
+            return user.save();
+        })
+        .then((result) => {
             res.status(201).json({
                 message: "Post succefully created.",
                 post: post,
+                creator: {
+                    _id: creator._id,
+                    name: creator.name,
+                },
             });
         })
         .catch((err) => {
@@ -114,10 +126,11 @@ exports.putUpdatePost = (req, res, next) => {
     Post.findById(postId)
         .then((post) => {
             if (!post) {
-                createErrorWithStatusCode(
-                    "Could not find the post.",
-                    404
-                );
+                createErrorWithStatusCode("Could not find the post.", 404);
+            }
+
+            if (post.creator.toString() !== req.userId) {
+                createErrorWithStatusCode("Not authorize.", 401);
             }
 
             if (imageUrl !== post.imageUrl) {
@@ -148,25 +161,31 @@ exports.deletePost = (req, res, next) => {
             if (!post) {
                 createErrorWithStatusCode("Could not find the post.", 404);
             }
-            //check logged in user
+            console.log("post.creator.toString() :: ", post.creator.toString());
+            console.log("req.userId :: ", req.userId);
+            if (post.creator.toString() !== req.userId.toString()) {
+                createErrorWithStatusCode("Not authorize.", 401);
+            }
             clearImage(post.imageUrl);
             return Post.findByIdAndRemove(postId);
         })
         .then((result) => {
-            console.log(result);
-            res.status(200).json({
-                message: "Post deleted succeessfuly.",
-                result: result,
-            });
+            return User.findById(req.userId)
+                .then((user) => {
+                    user.posts.pull(postId);
+                    return user.save();
+                })
+                .then((result) => {
+                    console.log(result);
+                    res.status(200).json({
+                        message: "Post deleted succeessfuly.",
+                        result: result,
+                    });
+                });
         })
         .catch((err) => {
             throwAsyncError(err, next);
         });
 };
 
-const clearImage = (filePath) => {
-    filePath = path.join(__dirname, "..", filePath);
-    fs.unlink(filePath, (err) => {
-        console.log(err);
-    });
-};
+

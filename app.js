@@ -10,7 +10,8 @@ const {
 
 
 const feedRoutes = require('./routes/feed')
-const authRoutes = require('./routes/auth.js')
+const authRoutes = require('./routes/auth')
+const userRoutes = require('./routes/user')
 const errorController = require('./controllers/error')
 
 const app = express()
@@ -54,13 +55,15 @@ app.use((req, res, next) => {
 // Routes
 app.use('/feed', feedRoutes)
 app.use('/auth', authRoutes)
+app.use('/user', userRoutes)
 app.use(errorController.get404)
 app.use(errorController.getErrors)
 
 // Database connect
 mongoose.connect('mongodb://127.0.0.1:27017/messages', {
         useNewUrlParser: true,
-        useUnifiedTopology: true
+        useUnifiedTopology: true,
+        useFindAndModify: false
     })
     .then(result => {
         app.listen(8080)
