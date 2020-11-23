@@ -10,6 +10,7 @@ const {
 
 
 const feedRoutes = require('./routes/feed')
+const authRoutes = require('./routes/auth.js')
 const errorController = require('./controllers/error')
 
 const app = express()
@@ -52,6 +53,7 @@ app.use((req, res, next) => {
 
 // Routes
 app.use('/feed', feedRoutes)
+app.use('/auth', authRoutes)
 app.use(errorController.get404)
 app.use(errorController.getErrors)
 

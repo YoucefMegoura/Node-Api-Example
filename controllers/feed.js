@@ -1,75 +1,172 @@
+const fs = require("fs");
+const path = require("path");
+const { validationResult } = require("express-validator");
+const { create } = require("../models/post");
+const Post = require("../models/post");
 const {
-    validationResult
-} = require('express-validator')
-const Post = require('../models/post')
-const {throwAsyncError, createErrorWithStatusCode} = require('../utils/errorHandling')
+    throwAsyncError,
+    createErrorWithStatusCode,
+} = require("../utils/errorHandling");
+
 
 exports.getPosts = (req, res, next) => {
+    const currentPage = req.query.page || 1;
+    const perPage = 2;
+    let totalItems;
     Post.find()
-        .then(posts => {
-            res.status(200)
-                .json({
-                    message: 'Fetched posts successfully.',
-                    posts: posts
-                })
+        .countDocuments()
+        .then((count) => {
+            totalItems = count;
+            return Post.find()
+                .skip((currentPage - 1) * perPage)
+                .limit(perPage);
         })
-        .catch(err => {
-            throwAsyncError(err)
+        .then((posts) => {
+            res.status(200).json({
+                message: "Fetched posts successfully.",
+                posts: posts,
+                totalItems: totalItems,
+            });
         })
-}
+        .catch((err) => {
+            throwAsyncError(err, next);
+        });
+};
 
 exports.postPost = (req, res, next) => {
-    const errors = validationResult(req)
+    const errors = validationResult(req);
     if (!errors.isEmpty()) {
-        createErrorWithStatusCode('Validation failed, entred data are incorrect.', 422)
-    }
-    
-    if (!req.file) {
-        createErrorWithStatusCode('No image provided.', 422)
+        createErrorWithStatusCode(
+            "Validation failed, entred data are incorrect.",
+            422,
+            errors.array()
+        );
     }
 
-    const title = req.body.title
-    const content = req.body.content
-    const imageUrl = req.file.path.replace('\\', '/')
+    if (!req.file) {
+        createErrorWithStatusCode("No image provided.", 422);
+    }
+
+    const title = req.body.title;
+    const content = req.body.content;
+    const imageUrl = req.file.path.replace("\\", "/");
     const post = new Post({
         title: title,
         content: content,
         imageUrl: imageUrl,
-        creator: 'Youcef Megoura'
-    })
+        creator: "Youcef Megoura",
+    });
     post.save()
-        .then(result => {
-            console.log(result)
-            res.status(201)
-                .json({
-                    message: 'Post succefully created.',
-                    post: result
-                })
+        .then((post) => {
+            console.log(post);
+            res.status(201).json({
+                message: "Post succefully created.",
+                post: post,
+            });
         })
-        .catch(err => {
-            throwAsyncError(err)
-        })
-}
+        .catch((err) => {
+            throwAsyncError(err, next);
+        });
+};
 
 exports.getPost = (req, res, next) => {
-    const postId = req.params.postId
+    const postId = req.params.postId;
     Post.findById(postId)
-        .then(post => {
+        .then((post) => {
             if (!post) {
-                const error = new Error('Could not find post.')
-                error.statusCode = 404
-                throw error
+                const error = new Error("Could not find post.");
+                error.statusCode = 404;
+                throw error;
             }
 
-            res.status(200)
-                .json({
-                    message: 'Post fetched.',
-                    post: post
-                })
+            res.status(200).json({
+                message: "Post fetched.",
+                post: post,
+            });
         })
-        .catch(err => {
-            throwAsyncError(err)
+        .catch((err) => {
+            throwAsyncError(err, next);
+        });
+};
+
+exports.putUpdatePost = (req, res, next) => {
+    const postId = req.params.postId;
+
+    const errors = validationResult(req);
+    if (!errors.isEmpty()) {
+        createErrorWithStatusCode(
+            "Validation failed, entred data are incorrect.",
+            422,
+            errors.array()
+        );
+    }
+
+    const title = req.body.title;
+    const content = req.body.content;
+    let imageUrl = req.body.image;
+    if (req.file) {
+        imageUrl = req.file.path.replace("\\", "/");
+    }
+    if (!imageUrl) {
+        createErrorWithStatusCode("No file picked.", 422);
+    }
+
+    Post.findById(postId)
+        .then((post) => {
+            if (!post) {
+                createErrorWithStatusCode(
+                    "Could not find the post.",
+                    404
+                );
+            }
+
+            if (imageUrl !== post.imageUrl) {
+                clearImage(post.imageUrl);
+            }
+
+            post.title = title;
+            post.content = content;
+            post.imageUrl = imageUrl;
+            return post.save();
         })
+        .then((post) => {
+            res.status(200).json({
+                message: "Post Updated",
+                post: post,
+            });
+        })
+        .catch((err) => {
+            throwAsyncError(err, next);
+        });
+};
 
-}
+exports.deletePost = (req, res, next) => {
+    const postId = req.params.postId;
+    console.log(postId);
+    Post.findById(postId)
+        .then((post) => {
+            if (!post) {
+                createErrorWithStatusCode("Could not find the post.", 404);
+            }
+            //check logged in user
+            clearImage(post.imageUrl);
+            return Post.findByIdAndRemove(postId);
+        })
+        .then((result) => {
+            console.log(result);
+            res.status(200).json({
+                message: "Post deleted succeessfuly.",
+                result: result,
+            });
+        })
+        .catch((err) => {
+            throwAsyncError(err, next);
+        });
+};
 
+const clearImage = (filePath) => {
+    filePath = path.join(__dirname, "..", filePath);
+    fs.unlink(filePath, (err) => {
+        console.log(err);
+    });
+};
